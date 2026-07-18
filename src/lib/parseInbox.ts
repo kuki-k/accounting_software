@@ -197,7 +197,9 @@ function cleanTitle(text: string): string {
     .replace(/[¥￥]\s*[0-9,]+/g, ' ')
     .replace(/[0-9,]+\s*円/g, ' ')
     .replace(/[0-9.]+\s*万\s*円?/g, ' ')
+    .replace(/は(?=まで)/g, '')
     .replace(/\s+/g, ' ')
+    .replace(/[はをがにでと]\s*$/g, '')
     .trim()
     .slice(0, 80)
 }
