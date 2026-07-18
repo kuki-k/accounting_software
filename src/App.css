@@ -60,10 +60,22 @@
 
 .space-lead {
   margin: 1rem 0 0;
-  max-width: 28rem;
+  max-width: 34rem;
   font-size: 1.05rem;
   line-height: 1.7;
   color: var(--muted);
+}
+
+.howto {
+  margin: 1.25rem 0 0;
+  padding-left: 1.2rem;
+  max-width: 34rem;
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+.howto li + li {
+  margin-top: 0.25rem;
 }
 
 .space-cta {
@@ -104,9 +116,137 @@
   color: var(--muted);
 }
 
+.inbox-panel,
+.timeline-board,
 .task-form-panel,
 .task-list-panel {
   padding: 1.25rem 0;
+}
+
+.panel-heading {
+  margin-bottom: 1rem;
+}
+
+.panel-heading.compact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panel-heading h2,
+.panel-heading h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.panel-heading p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.panel-heading.compact p {
+  margin: 0;
+}
+
+.inbox-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.inbox-form textarea {
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font: inherit;
+  padding: 0.85rem 0.95rem;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.inbox-form textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 107, 90, 0.15);
+}
+
+.inbox-attach-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.inbox-attach-row .grow {
+  min-width: 0;
+}
+
+.attachment-list,
+.pending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.attachment-list {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.inbox-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.inbox-actions,
+.pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pending-box {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.pending-list li {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.pending-list pre {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+  font: inherit;
+  color: var(--ink);
+}
+
+.pending-attachments {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.horizon-section + .horizon-section {
+  margin-top: 1.75rem;
+  padding-top: 0.5rem;
+}
+
+.empty-state.soft {
+  border-top: none;
+  padding: 0.35rem 0 0.75rem;
 }
 
 .task-form-panel__bar,
@@ -408,7 +548,8 @@
 
 @media (max-width: 640px) {
   .field-row,
-  .custom-tag-row {
+  .custom-tag-row,
+  .inbox-attach-row {
     grid-template-columns: 1fr;
   }
 

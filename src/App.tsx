@@ -1,24 +1,25 @@
-import { useState } from 'react'
-import { ItemForm } from './components/ItemForm'
-import { ItemList } from './components/ItemList'
+import { Inbox } from './components/Inbox'
+import { TimelineBoard } from './components/TimelineBoard'
 import { useFamilySpace } from './hooks/useFamilySpace'
-import type { FamilyMember, ItemStatus, ItemTag } from './types'
 import './App.css'
 
 function App() {
-  const { space, allTags, addItem, toggleItem, removeItem, resetSpace } =
-    useFamilySpace()
-  const [filterTag, setFilterTag] = useState<ItemTag | 'すべて'>('すべて')
-  const [filterMember, setFilterMember] = useState<FamilyMember | 'すべて'>(
-    'すべて',
-  )
-  const [filterStatus, setFilterStatus] = useState<ItemStatus | 'すべて'>('open')
+  const {
+    space,
+    pendingInbox,
+    itemsByHorizon,
+    queueInbox,
+    queueAndProcess,
+    processInboxEntry,
+    processAllPending,
+    removeInboxEntry,
+    toggleItem,
+    removeItem,
+    resetSpace,
+  } = useFamilySpace()
 
   const openCount = space.items.filter((item) => item.status === 'open').length
-  const doneCount = space.items.filter((item) => item.status === 'done').length
-  const moneyTotal = space.items
-    .filter((item) => item.status === 'open' && typeof item.amount === 'number')
-    .reduce((sum, item) => sum + (item.amount ?? 0), 0)
+  const pendingCount = pendingInbox.length
 
   return (
     <div className="app-shell">
@@ -28,9 +29,14 @@ function App() {
         <p className="space-kicker">accounting software</p>
         <h1 className="space-brand">{space.name}</h1>
         <p className="space-lead">{space.description}</p>
+        <ol className="howto">
+          <li>インボックスにメモ・写真・PDFリンクを入れる</li>
+          <li>「整理して反映」で読み取り、項目に分解する</li>
+          <li>今月 / 3ヶ月以内 / 今後 に自動で振り分けられる</li>
+        </ol>
         <div className="space-cta">
-          <a className="primary-button" href="#items">
-            一覧を見る
+          <a className="primary-button" href="#inbox">
+            インボックスへ
           </a>
           <button type="button" className="ghost-button" onClick={resetSpace}>
             初期サンプルに戻す
@@ -38,48 +44,41 @@ function App() {
         </div>
       </header>
 
-      <main id="items" className="space-main">
+      <main className="space-main">
         <section className="space-summary" aria-label="スペース概要">
+          <div>
+            <strong>{pendingCount}</strong>
+            <span>未整理メモ</span>
+          </div>
           <div>
             <strong>{openCount}</strong>
             <span>未対応</span>
           </div>
           <div>
-            <strong>{doneCount}</strong>
-            <span>済</span>
-          </div>
-          <div>
-            <strong>{formatCompactYen(moneyTotal)}</strong>
-            <span>未対応の金額合計</span>
+            <strong>{itemsByHorizon.this_month.length}</strong>
+            <span>今月</span>
           </div>
         </section>
 
-        <ItemForm existingTags={allTags} onAdd={addItem} />
+        <div id="inbox">
+          <Inbox
+            pending={pendingInbox}
+            onQueue={queueInbox}
+            onQueueAndProcess={queueAndProcess}
+            onProcessAll={processAllPending}
+            onProcessOne={processInboxEntry}
+            onRemove={removeInboxEntry}
+          />
+        </div>
 
-        <ItemList
-          items={space.items}
-          availableTags={allTags}
-          filterTag={filterTag}
-          filterMember={filterMember}
-          filterStatus={filterStatus}
-          onFilterTag={setFilterTag}
-          onFilterMember={setFilterMember}
-          onFilterStatus={setFilterStatus}
+        <TimelineBoard
+          itemsByHorizon={itemsByHorizon}
           onToggle={toggleItem}
           onRemove={removeItem}
         />
       </main>
     </div>
   )
-}
-
-function formatCompactYen(value: number): string {
-  if (value === 0) return '¥0'
-  if (value >= 10000) {
-    const man = value / 10000
-    return `¥${man.toLocaleString('ja-JP', { maximumFractionDigits: 1 })}万`
-  }
-  return `¥${value.toLocaleString('ja-JP')}`
 }
 
 export default App

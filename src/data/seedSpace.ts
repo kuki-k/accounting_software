@@ -1,4 +1,5 @@
 import type { FamilySpace } from '../types'
+import { toDateString } from '../lib/timeHorizon'
 
 export const FAMILY_SPACE_ID = 'space-family-life'
 
@@ -9,8 +10,23 @@ export function createFamilyTaskSpace(): FamilySpace {
     id: FAMILY_SPACE_ID,
     name: '家庭ライフ',
     description:
-      'サブスク解約の目安、誕生日、子どもの行事、旅行、資金繰りなど、家庭で忘れずに押さえたいことをまとめるスペースです。ラベルは自由に増やせます。',
+      'インボックスにメモを入れるだけで、今月・3ヶ月以内・今後へ整理します。プリント写真やPDFリンク、親戚の誕生日・お年玉などもメモのまま投げてください。',
     createdAt: now,
+    inbox: [
+      {
+        id: 'inbox-sample-1',
+        text: [
+          '幼稚園の遠足 10月3日 お弁当持参',
+          '祖母の誕生日は3月3日',
+          'おじいちゃんからお年玉 1万円もらった',
+          'Netflix解約は来月末までに判断',
+          'https://example.com/kindergarten/print.pdf',
+        ].join('\n'),
+        attachments: [],
+        createdAt: now,
+        status: 'pending',
+      },
+    ],
     items: [
       {
         id: 'item-1',
@@ -31,13 +47,13 @@ export function createFamilyTaskSpace(): FamilySpace {
         status: 'open',
         createdAt: now,
         date: monthDayThisYear(8, 12),
-        note: '欲しいものリストを聞く',
+        person: '長男',
       },
       {
         id: 'item-3',
         title: '運動会の持ち物確認',
         tags: ['子ども', '学校'],
-        assignee: 'ママ',
+        assignee: '子ども',
         status: 'open',
         createdAt: now,
         date: todayOffset(14),
@@ -63,6 +79,17 @@ export function createFamilyTaskSpace(): FamilySpace {
         date: todayOffset(30),
         amount: 85000,
       },
+      {
+        id: 'item-6',
+        title: '叔母の誕生日を祝う',
+        tags: ['誕生日', '親戚'],
+        assignee: 'みんな',
+        status: 'open',
+        createdAt: now,
+        date: monthDayThisYear(11, 20),
+        person: '叔母',
+        note: '名前: 由美子さん',
+      },
     ],
   }
 }
@@ -76,15 +103,6 @@ function todayOffset(days: number): string {
 function monthDayThisYear(month: number, day: number): string {
   const now = new Date()
   const date = new Date(now.getFullYear(), month - 1, day)
-  if (date < now) {
-    date.setFullYear(now.getFullYear() + 1)
-  }
+  if (date < now) date.setFullYear(now.getFullYear() + 1)
   return toDateString(date)
-}
-
-function toDateString(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
 }

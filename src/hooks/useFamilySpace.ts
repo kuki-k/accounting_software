@@ -1,37 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createFamilyTaskSpace, FAMILY_SPACE_ID } from '../data/seedSpace'
+import { parseInboxText } from '../lib/parseInbox'
+import { getTimeHorizon } from '../lib/timeHorizon'
 import type {
+  Attachment,
   FamilyItem,
-  FamilyMember,
   FamilySpace,
+  InboxEntry,
   ItemStatus,
-  ItemTag,
+  TimeHorizon,
 } from '../types'
 import { normalizeTag } from '../types'
 
-const STORAGE_KEY = 'accounting_software.family_life_space.v2'
-const LEGACY_STORAGE_KEY = 'accounting_software.family_task_space.v1'
+const STORAGE_KEY = 'accounting_software.family_life_space.v3'
+const LEGACY_V2_KEY = 'accounting_software.family_life_space.v2'
+const LEGACY_V1_KEY = 'accounting_software.family_task_space.v1'
 
-export interface NewItemInput {
-  title: string
-  tags: ItemTag[]
-  assignee: FamilyMember
-  date?: string
-  amount?: number
-  note?: string
+export interface DraftAttachmentInput {
+  kind: Attachment['kind']
+  name: string
+  href?: string
+  mimeType?: string
 }
 
 function loadSpace(): FamilySpace {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
+    for (const key of [STORAGE_KEY, LEGACY_V2_KEY]) {
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
       const parsed = JSON.parse(raw) as FamilySpace
       if (isValidSpace(parsed)) return normalizeSpace(parsed)
     }
 
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    const legacy = localStorage.getItem(LEGACY_V1_KEY)
     if (legacy) {
-      const migrated = migrateLegacy(JSON.parse(legacy))
+      const migrated = migrateLegacyV1(JSON.parse(legacy))
       if (migrated) return migrated
     }
 
@@ -52,37 +55,42 @@ function isValidSpace(value: unknown): value is FamilySpace {
 }
 
 function normalizeSpace(space: FamilySpace): FamilySpace {
+  const base = createFamilyTaskSpace()
   return {
+    ...base,
     ...space,
     id: FAMILY_SPACE_ID,
+    description: space.description || base.description,
+    inbox: Array.isArray(space.inbox) ? space.inbox : [],
     items: space.items.map((item) => ({
       ...item,
       tags: (item.tags ?? []).map(normalizeTag).filter(Boolean),
       status: item.status === 'done' ? 'done' : 'open',
+      attachments: item.attachments ?? [],
     })),
   }
 }
 
-function migrateLegacy(raw: unknown): FamilySpace | null {
+function migrateLegacyV1(raw: unknown): FamilySpace | null {
   if (!raw || typeof raw !== 'object') return null
   const legacy = raw as {
     tasks?: Array<{
       id: string
       title: string
       category?: string
-      assignee?: FamilyMember
+      assignee?: FamilyItem['assignee']
       status?: string
       createdAt?: string
       dueDate?: string
       note?: string
     }>
   }
-
   if (!Array.isArray(legacy.tasks)) return null
 
   const base = createFamilyTaskSpace()
   return {
     ...base,
+    inbox: [],
     items: legacy.tasks.map((task) => ({
       id: task.id || `item-${crypto.randomUUID()}`,
       title: task.title,
@@ -93,6 +101,38 @@ function migrateLegacy(raw: unknown): FamilySpace | null {
       date: task.dueDate,
       note: task.note,
     })),
+  }
+}
+
+function materializeInboxEntry(entry: InboxEntry): {
+  items: FamilyItem[]
+  inboxEntry: InboxEntry
+} {
+  const parsed = parseInboxText(entry.text, entry.attachments)
+  const createdAt = new Date().toISOString()
+  const items: FamilyItem[] = parsed.map((part) => ({
+    id: `item-${crypto.randomUUID()}`,
+    title: part.title,
+    tags: part.tags,
+    assignee: part.assignee,
+    status: 'open',
+    createdAt,
+    date: part.date,
+    amount: part.amount,
+    person: part.person,
+    note: part.note,
+    sourceInboxId: entry.id,
+    attachments: part.attachments,
+  }))
+
+  return {
+    items,
+    inboxEntry: {
+      ...entry,
+      status: 'processed',
+      processedAt: createdAt,
+      producedItemIds: items.map((item) => item.id),
+    },
   }
 }
 
@@ -109,40 +149,147 @@ export function useFamilySpace() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(space))
   }, [space, ready])
 
-  const allTags = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const item of space.items) {
-      for (const tag of item.tags) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1)
-      }
+  const pendingInbox = useMemo(
+    () => space.inbox.filter((entry) => entry.status === 'pending'),
+    [space.inbox],
+  )
+
+  const itemsByHorizon = useMemo(() => {
+    const buckets: Record<TimeHorizon, FamilyItem[]> = {
+      this_month: [],
+      within_3_months: [],
+      later: [],
+      undated: [],
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'))
-      .map(([tag]) => tag)
+
+    for (const item of space.items.filter((entry) => entry.status === 'open')) {
+      buckets[getTimeHorizon(item.date)].push(item)
+    }
+
+    for (const key of Object.keys(buckets) as TimeHorizon[]) {
+      buckets[key].sort((a, b) =>
+        (a.date ?? '9999').localeCompare(b.date ?? '9999'),
+      )
+    }
+
+    return buckets
   }, [space.items])
 
-  function addItem(input: NewItemInput) {
-    const title = input.title.trim()
-    if (!title) return
+  function buildAttachments(
+    draftAttachments: DraftAttachmentInput[],
+  ): Attachment[] {
+    return draftAttachments.map((file) => ({
+      id: `att-${crypto.randomUUID()}`,
+      kind: file.kind,
+      name: file.name,
+      href: file.href,
+      mimeType: file.mimeType,
+    }))
+  }
 
-    const item: FamilyItem = {
-      id: `item-${crypto.randomUUID()}`,
-      title,
-      tags: input.tags.map(normalizeTag).filter(Boolean),
-      assignee: input.assignee,
-      status: 'open',
+  function queueInbox(text: string, draftAttachments: DraftAttachmentInput[] = []) {
+    const body = text.trim()
+    if (!body && draftAttachments.length === 0) return
+
+    const entry: InboxEntry = {
+      id: `inbox-${crypto.randomUUID()}`,
+      text: body,
+      attachments: buildAttachments(draftAttachments),
       createdAt: new Date().toISOString(),
-      date: input.date || undefined,
-      amount:
-        typeof input.amount === 'number' && !Number.isNaN(input.amount)
-          ? input.amount
-          : undefined,
-      note: input.note?.trim() || undefined,
+      status: 'pending',
     }
 
     setSpace((current) => ({
       ...current,
-      items: [item, ...current.items],
+      inbox: [entry, ...current.inbox],
+    }))
+  }
+
+  function queueAndProcess(
+    text: string,
+    draftAttachments: DraftAttachmentInput[] = [],
+  ) {
+    const body = text.trim()
+    const hasDraft = Boolean(body || draftAttachments.length > 0)
+
+    setSpace((current) => {
+      let inbox = current.inbox
+      if (hasDraft) {
+        const entry: InboxEntry = {
+          id: `inbox-${crypto.randomUUID()}`,
+          text: body,
+          attachments: buildAttachments(draftAttachments),
+          createdAt: new Date().toISOString(),
+          status: 'pending',
+        }
+        inbox = [entry, ...current.inbox]
+      }
+
+      const newItems: FamilyItem[] = []
+      const nextInbox = inbox.map((entry) => {
+        if (entry.status !== 'pending') return entry
+        const result = materializeInboxEntry(entry)
+        newItems.push(...result.items)
+        return result.inboxEntry
+      })
+
+      if (newItems.length === 0 && inbox === current.inbox) return current
+
+      return {
+        ...current,
+        items: [...newItems, ...current.items],
+        inbox: nextInbox,
+      }
+    })
+  }
+
+  function processInboxEntry(entryId: string) {
+    let created = 0
+    setSpace((current) => {
+      const entry = current.inbox.find((item) => item.id === entryId)
+      if (!entry || entry.status === 'processed') return current
+
+      const result = materializeInboxEntry(entry)
+      created = result.items.length
+      return {
+        ...current,
+        items: [...result.items, ...current.items],
+        inbox: current.inbox.map((inboxEntry) =>
+          inboxEntry.id === entryId ? result.inboxEntry : inboxEntry,
+        ),
+      }
+    })
+    return created
+  }
+
+  function processAllPending() {
+    let created = 0
+    setSpace((current) => {
+      const pending = current.inbox.filter((entry) => entry.status === 'pending')
+      if (pending.length === 0) return current
+
+      const newItems: FamilyItem[] = []
+      const inbox = current.inbox.map((entry) => {
+        if (entry.status !== 'pending') return entry
+        const result = materializeInboxEntry(entry)
+        newItems.push(...result.items)
+        return result.inboxEntry
+      })
+
+      created = newItems.length
+      return {
+        ...current,
+        items: [...newItems, ...current.items],
+        inbox,
+      }
+    })
+    return created
+  }
+
+  function removeInboxEntry(entryId: string) {
+    setSpace((current) => ({
+      ...current,
+      inbox: current.inbox.filter((entry) => entry.id !== entryId),
     }))
   }
 
@@ -176,8 +323,13 @@ export function useFamilySpace() {
   return {
     space,
     ready,
-    allTags,
-    addItem,
+    pendingInbox,
+    itemsByHorizon,
+    queueInbox,
+    queueAndProcess,
+    processInboxEntry,
+    processAllPending,
+    removeInboxEntry,
     toggleItem,
     removeItem,
     resetSpace,
